@@ -1,0 +1,132 @@
+---
+title: "Norway Wins 2022 Winter Olympic Games"
+author: "Christy Hough, Gabriella Cutler, Abby Brown, Cayle Jones"
+date: "2/20/2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+\begin{center}
+\textbf{Abstract}
+\end{center}
+The Olympic Games originated in ancient Greece about 3,000 years ago and for a while, were held in honor of Zeus every four years in Olympia. Around 1924 the Olympics truly became an international sporting event and the Winter Olympics became its own event. Since 1994, the Summer and Winter Olympics have been held separately and have alternated every two years. Here, we have explored the data of over 2,800 athletes and 91 Nations that took part in the 2022 Winter Olympics in Beijing. There are details for the Athletes, Coaches, Technical Coaches, Teams participating, and Entries by gender with names, countries represented, discipline, gender of competitors, and names of the coaches.
+
+The 2022 Olympic Games were held in Beijing, China from February 4 to February 20, 2022.  This poster will analyze how each country did in the games.  It will show how many medals were won by each country, what country the participants came from and which events the top teams participated in. The data for the poster comes from the 2022 Winter Olympics dataset on Kaggle, https://www.kaggle.com/arjunprasadsarkhel/2022-winter-olympics-beijing.  It includes data sets on medals won, countries that participated, and athletes that participated in the games.  
+```{r, echo=FALSE}
+library(knitr)
+library(readxl)
+medals <- read_excel("C://Users//chrho//Desktop//Data Visualization//Poster Data//Medals_2022.xlsx")
+medals[medals == "ROC"] <- "Russia"
+
+teams <- read_excel("C://Users//chrho//Desktop//Data Visualization//Poster Data//Teams.xlsx")
+
+discipline <- read_excel("C://Users//chrho//Desktop//Data Visualization//Poster Data//Entries_By_Discipline.xlsx")
+
+athletes <- read_excel("C://Users//chrho//Desktop//Data Visualization//Poster Data//Athletes.xlsx")
+```
+
+# Medals
+```{r, echo=FALSE}
+library(forcats)
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(stringr)
+library(reshape2)
+library(ggplot2)
+library(maps)
+library(RColorBrewer)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(rworldmap)
+library(mapproj)
+library(ggrepel)
+kable(head(medals, 10))
+```
+
+Table:
+This table shows the top 10 countries from the Winter Olympics. For each country in the top 10, it shows awarded medals split between bronze, silver, and gold. It also shows the total won by each top 10 country and rank based on total medals.
+
+
+```{r, echo=FALSE}
+medals$Gold <- as.numeric(as.character(medals$Gold))
+medals$Silver <- as.numeric(as.character(medals$Silver))
+medals$Bronze <- as.numeric(as.character(medals$Bronze))
+medals$Total <- as.numeric(as.character(medals$Total))
+medalsMelted <- melt(medals, id.var = 'NOC', measure.vars = c('Gold', 'Silver', 'Bronze'), variable.name = 'medalType')
+
+
+ggplot(medalsMelted, aes(x=reorder(NOC, value), y = value, fill = medalType)) + geom_bar(position="stack", stat="identity") + scale_fill_manual(values = c("#E69F00", "#999999", "#56B4E9")) + coord_flip() + xlab("Country") + ylab("Medal Count") +  theme(axis.text.x=element_text(angle=90,hjust=1)) + labs(fill = "Medal Type")
+
+```
+Above is graphed each country’s total medals won during the Winter Olympics. This bar graph shows each country in descending order of total medals won. Each type of medal, gold, silver, and bronze is differentiated by color to see each country’s distribution of medals.
+
+# Athletes
+```{r, echo=FALSE}
+athletesSummary <- athletes %>%
+  group_by(NOC) %>%
+  count(NOC) %>%
+  rename(Region=NOC, numAthletes=n) %>%
+  data.frame()
+athletesSummary[athletesSummary == "ROC"] <- "Russia"
+
+athletes_map <- joinCountryData2Map(athletesSummary, joinCode = "NAME", nameJoinColumn = "Region")
+athletes_map_poly <- fortify(athletes_map)
+
+athletes_map_poly <- merge(athletes_map_poly, athletes_map@data, by.x="id", by.y="Region", all.x=T)
+athletes_map_poly <- athletes_map_poly %>% arrange(id, order)
+
+ggplot() + 
+  coord_map(xlim = c(-180, 180), ylim = c(-60, 75))  +
+  geom_polygon(data = athletes_map_poly, aes(long, lat, group = group, 
+               fill=numAthletes),size = 0.3) + scale_fill_steps(low = "#56B4E9", high = "#E69F00", na.value = "#000000") +
+theme_bw() + xlab(NULL) + ylab(NULL) + labs(fill = "Number of Athletes")
+
+```
+In the Heat Map displayed, it shows the distribution of athletes sent to the Winter Olympics by each country. The United States sent the most athletes along with Canada and Russia sending similar numbers. This shows the wide margin between the most and least athletes sent between every country.
+
+# Disciplines
+```{r, echo=FALSE}
+disciplines <- athletes %>%
+  group_by(NOC, Discipline) %>%
+  count(NOC, Discipline) %>%
+  rename(Region=NOC, Athletes=n)
+  data.frame()
+disciplines[disciplines == "ROC"] <- "Russia"
+
+disciplines2 <- disciplines %>%
+  group_by(Region) %>%
+  count(Region) %>%
+  rename(numDisciplines=n)
+  data.frame()
+
+disciplines3 <- subset(disciplines, Region == "United States of America" | Region == "Norway" | Region == "Russia" | Region == "Germany" | Region == "Canada")
+
+medalsSummary <- select(medals, NOC, Gold, Silver, Bronze, Total) %>%
+  rename(Region=NOC)
+  data.frame()
+medalsSummary[medalsSummary == "ROC"] <- "Russia"
+
+medalWinSum <- merge(disciplines2, medalsSummary, by = "Region") 
+medalWinSum <- merge(medalWinSum, athletesSummary, by = "Region") 
+
+
+ggplot(medalWinSum, aes(x=numAthletes, y = Total)) + 
+         geom_point() + 
+  xlab("Number of Athletes") + ylab("Total Medals Won") + geom_text_repel(aes(label=Region))
+```
+In this scatterplot, each country is plotted showing the relationship between the number of athletes sent and the total medals won. In general, the more athletes sent by a country, the more medals won. Norway is the only exception being in the middle of the countries for athletes sent but won the most medals.
+
+```{r, echo=FALSE}
+ggplot(disciplines3, aes(x=reorder(Discipline, desc(Athletes)), y = Athletes)) + 
+         geom_bar(stat = "identity") + facet_wrap(~Region) + 
+  xlab("Discipline") + ylab("Number of Athletes") + theme(axis.text.x=element_text(angle=90,hjust=1))
+```
+Here are five bar charts that show the top five countries and their distribution of athletes among each of the events at the Winter Olympics. The most popular event was ice hockey with the most athletes entered in that event. This bar chart shows the the discrepancy in the number of athletes Norway sent compared to other countries.
